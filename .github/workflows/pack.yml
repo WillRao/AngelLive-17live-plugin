@@ -1,0 +1,69 @@
+name: pack
+
+# 插件源码或版本号一变，就重新打包并把产物提交回 docs/，Pages 会自动更新。
+#
+# 防打环有两道保险：
+#   1. 提交只会动 docs/，而 docs/ 不在下面的 paths 里，不会再次触发；
+#   2. 提交信息里带 [skip ci]，GitHub 会直接跳过这次 push 的 workflow。
+on:
+  push:
+    branches: [main]
+    paths:
+      - "manifest.json"
+      - "index.js"
+      - "danmaku.js"
+      - "assets/**"
+      - "dev/pack.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # 离线回放层不碰网络，可以在 CI 里跑 —— 它守的是最容易静默失效的部分：
+      # 手写 inflate 与 JSON 取值路径。夹具已经提交进仓库，所以这一步是确定性的。
+      - name: 弹幕解析离线回归
+        run: node dev/verify-parser.mjs
+
+  pack:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # 打包是可复现的（mtime 固定 + 文件名排序 + TZ=UTC），所以 CI 产出的 sha256
+      # 和本地跑出来的完全一致，不会出现「文档写的哈希对不上」这种事。
+      - name: 重新打包
+        run: node dev/pack.mjs
+
+      - name: 校验可复现（重跑一次应逐字节一致）
+        run: |
+          shasum -a 256 docs/17live-*.zip | awk '{print $1}' > /tmp/first.txt
+          node dev/pack.mjs > /dev/null
+          shasum -a 256 docs/17live-*.zip | awk '{print $1}' > /tmp/second.txt
+          diff /tmp/first.txt /tmp/second.txt && echo "打包可复现 ✅"
+
+      - name: 提交产物
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          if git diff --cached --quiet; then
+            echo "docs/ 没有变化，跳过提交"
+            exit 0
+          fi
+          git commit -m "chore: 重新打包 docs/ [skip ci]"
+          git push

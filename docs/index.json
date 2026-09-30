@@ -1,0 +1,33 @@
+{
+  "apiVersion": 1,
+  "plugins": [
+    {
+      "pluginId": "17live",
+      "version": "1.0.0",
+      "changelog": [
+        "1.0.0：首个版本。分类：api-dsa.17app.co/api/v1/liveStreams/regionList 的地区列表（全球/日本/中国台湾/中国香港，按在播量排序）；房间列表：/api/v1/sections（home feed，扁平化各 section 的 grids，只取 status===2 的在播流，cursor 游标分页并在页间去重）；房间详情与开播状态：/api/v1/lives/{liveStreamID}（免鉴权）；取流：rtmpUrls 的两条 provider 都给出（wansu 的 https 侧四档 HLS + FLV，tencent 的 http 侧 FLV 备用）；搜索：/api/v1/liveStreams/search?query=；弹幕：Host.ws 直连 Ably（wss://17media-realtime.ably.io，action 10 ATTACH，channel 即 liveStreamID），帧内 messages[].data 是 base64(gzip(JSON))，插件自带纯 JS inflate 解压。",
+        "房间号语义是 liveStreamID（数字），不是主播 userID（UUID）—— /api/v1/lives/<uuid> 会返回 invalid roomID。分享链接形如 https://17.live/live/<liveStreamID>，插件也认这种 URL。",
+        "取流线路（实测 2026-09-30）：provider 5（wansu-global-pull-rtmp-latency.17app.co）是 https，把 .flv 换成 .m3u8 会返回标准 HLS master playlist（再重定向到 100ycdn，URL 带一次性 wsSession 鉴权），BANDWIDTH 依次为 原画 3228000 / _h264 2816000 / _QEHDSA 1859000 / _LBHDSA 698000；provider 17（tencent-global-pull-rtmp.17app.co）只有 http，https 握手空回、404。两条线路的可用性会**各自独立抖动**（探测中 wansu 曾被限流到整段时间全部超时，同一时刻 tencent 照常能拉下 1.4MB），所以两条都给出来让用户可手动切换，只给一条遇到单边故障就是「平台全挂」。http 不影响播放：iOS/macOS/tvOS 三个 Info.plist 都开了 NSAllowsArbitraryLoads。",
+        "弹幕消息类型（实测）：type 3=聊天（显示）、27=订阅者进场（显示）、18=普通进场（显示）、79=打工奖励（默认关）、119=主播实时字幕日/繁/英（默认关）、47=戳 / 51=红包（默认关）；6/38/74 为在线时长与人气之类的信令，忽略。开关都在 danmaku.js 顶部。",
+        "宿主 Host.* 没有 gzip 解压能力（JSRuntime 只暴露 http / crypto.md5 / crypto.base64Decode / runtime.loadBuiltinScript），因此 danmaku.js 内联了一份 raw DEFLATE 解码器（含 stored / 固定 Huffman / 动态 Huffman 三条路径与多 member 串联）。dev/verify-parser.mjs 用 Node 的 zlib 做独立 oracle 与它逐条按字节对拍，防止手写 inflate 静默解错。",
+        "弹幕心跳：**刻意不回应**入站 action 0。实测把入站心跳原样弹回会与对端互刷（20s 内入站心跳从 1 次放大到 8 次），而 Ably 的保活只要求 connectionStateTtl(120s) 内收到过任何东西。改为按 15s 墙钟截止时间单边发声，且收帧与 tick 两条回调路径都会补发 —— 这样即使宿主每次都重装 timer 导致 tick 永不触发，心跳也不会断。"
+      ],
+      "platform": "17live",
+      "platformName": "17LIVE",
+      "platformDescription": "17LIVE（17直播）",
+      "zipURL": "https://willrao.github.io/AngelLive-17live-plugin/17live-1.0.0.zip",
+      "zipURLs": [
+        "https://willrao.github.io/AngelLive-17live-plugin/17live-1.0.0.zip",
+        "https://cdn.jsdelivr.net/gh/WillRao/AngelLive-17live-plugin@main/docs/17live-1.0.0.zip",
+        "https://fastly.jsdelivr.net/gh/WillRao/AngelLive-17live-plugin@main/docs/17live-1.0.0.zip"
+      ],
+      "sha256": "223c134e30e4bf616a0f5b5b66ada9a553abfc77f8fae07c6ba852154f28a8fd",
+      "auth": {
+        "required": false,
+        "credentialKinds": [],
+        "supportsStatusCheck": false,
+        "supportsValidation": false
+      }
+    }
+  ]
+}
