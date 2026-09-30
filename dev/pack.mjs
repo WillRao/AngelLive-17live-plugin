@@ -12,6 +12,8 @@
 //
 // 关键点：
 //   * 只打包运行时文件，dev/ 与 README 一律不进包（白名单式收集）。
+//   * assets/ 下的平台图标是**必须打进包**的：宿主按固定文件名去已安装目录找图，
+//     不进包就等于没图标。这里会当场校验存在 + PNG 魔数 + 尺寸，见下面 ICON_FILES。
 //   * 用 staging 目录把 mtime 固定成 2020-01-01，保证同样的源码产出同样的 zip，
 //     进而 sha256 稳定（宿主按 sha256 校验）。
 //   * zip 内部不带目录条目（-D），与 plugins.carsonn.works 上的现有包一致。
@@ -77,6 +79,48 @@ function walk(dir, base) {
 }
 walk(join(pluginRoot, "assets"), pluginRoot);
 
+// ---- 平台图标必须有，且必须是对尺寸 ----
+// 宿主不读 manifest 的图标字段，而是按固定文件名去「已安装插件目录」找 PNG
+// （见各平台 PlatformIconProvider），所以图标只能靠打进 zip 来交付：
+//   live_card_       iOS tab / tvOS 账号列表 / 索引里的四个 icon 字段
+//   mini_live_card_  macOS 侧边栏
+//   pad_live_card_   iOS / macOS 插件管理列表
+//   tv_*_big|small   tvOS 平台页大图与焦点叠标（_dark 缺失时会回退到亮色版）
+// 这里当场校验存在 + PNG 魔数 + 尺寸，免得打出一包「图标缺失/坏图」的版本 ——
+// 那种问题在 App 里只表现为「图标没了」，很难定位回来。
+const ICON_FILES = [
+  [`assets/live_card_${pluginId}.png`, 128, 128],
+  [`assets/mini_live_card_${pluginId}.png`, 128, 128],
+  [`assets/pad_live_card_${pluginId}.png`, 128, 128],
+  [`assets/tv_${pluginId}_big.png`, 740, 444],
+  [`assets/tv_${pluginId}_big_dark.png`, 740, 444],
+  [`assets/tv_${pluginId}_small.png`, 740, 444],
+  [`assets/tv_${pluginId}_small_dark.png`, 740, 444]
+];
+
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+for (const [rel, wantWidth, wantHeight] of ICON_FILES) {
+  let buf;
+  try {
+    buf = readFileSync(join(pluginRoot, rel));
+  } catch (error) {
+    console.error(`图标缺失：${rel} —— 先跑 python3 dev/make-icons.py 生成`);
+    process.exit(1);
+  }
+  if (buf.length < 24 || !buf.subarray(0, 8).equals(PNG_SIGNATURE)) {
+    console.error(`不是合法 PNG：${rel}`);
+    process.exit(1);
+  }
+  // IHDR 的宽高固定落在签名(8) + 长度(4) + 类型(4) 之后
+  const width = buf.readUInt32BE(16);
+  const height = buf.readUInt32BE(20);
+  if (width !== wantWidth || height !== wantHeight) {
+    console.error(`图标尺寸不对：${rel} 是 ${width}×${height}，期望 ${wantWidth}×${wantHeight}`);
+    process.exit(1);
+  }
+  files.add(rel);
+}
+
 const sorted = Array.from(files).sort();
 // 校验白名单里的文件都真实存在，避免打出缺文件的包
 for (const rel of sorted) {
@@ -135,6 +179,9 @@ if (baseURL === PAGES_BASE) {
   for (const template of MIRROR_TEMPLATES) zipURLs.push(template.replace("{path}", zipName));
 }
 
+// 四个 icon 字段统一指向这一张（官方插件源的写法就是四个字段同一个路径）
+const iconPath = `assets/live_card_${pluginId}.png`;
+
 const index = {
   apiVersion: 1,
   // 刻意不写 generatedAt：它在宿主侧是可选字段，除解码外没有任何使用点，
@@ -148,7 +195,17 @@ const index = {
       platform: pluginId,
       platformName: manifest.displayName || pluginId,
       platformDescription: manifest.platformDescription || "",
-      // icon / iosIcon / macosIcon / tvos* 都是可选的，这里不提供，App 会用默认图标。
+      // 图标四项都指向同一张 live_card_<id>.png —— 与官方插件源
+      // （plugins.carsonn.works 的 /api/plugins）写法一致。这些字段目前只是元数据：
+      // 宿主真正渲染用的是包内 assets/ 下那几个固定文件名，包不带图就没图标。
+      icon: iconPath,
+      iosIcon: iconPath,
+      macosIcon: iconPath,
+      tvosIcon: iconPath,
+      tvosBigIcon: `assets/tv_${pluginId}_big.png`,
+      tvosSmallIcon: `assets/tv_${pluginId}_small.png`,
+      tvosBigIconDark: `assets/tv_${pluginId}_big_dark.png`,
+      tvosSmallIconDark: `assets/tv_${pluginId}_small_dark.png`,
       zipURL,
       zipURLs,
       sha256,

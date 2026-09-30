@@ -3,8 +3,9 @@
   "plugins": [
     {
       "pluginId": "17live",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "changelog": [
+        "1.1.0：补齐平台图标。宿主不读 manifest 里的图标字段，而是按固定文件名去「已安装插件目录」找 PNG，因此图标必须打进 zip 的 assets/ 下：assets/live_card_17live.png（128×128，iOS tab / tvOS 账号列表 / 索引四个 icon 字段）、assets/mini_live_card_17live.png（macOS 侧边栏）、assets/pad_live_card_17live.png（iOS/macOS 插件管理列表）、assets/tv_17live_big|small[_dark].png（740×444，tvOS 平台页大图与焦点叠标）。图源是 17LIVE 官方 App 图标，由 dev/make-icons.py 生成。",
         "1.0.0：首个版本。分类：api-dsa.17app.co/api/v1/liveStreams/regionList 的地区列表（全球/日本/中国台湾/中国香港，按在播量排序）；房间列表：/api/v1/sections（home feed，扁平化各 section 的 grids，只取 status===2 的在播流，cursor 游标分页并在页间去重）；房间详情与开播状态：/api/v1/lives/{liveStreamID}（免鉴权）；取流：rtmpUrls 的两条 provider 都给出（wansu 的 https 侧四档 HLS + FLV，tencent 的 http 侧 FLV 备用）；搜索：/api/v1/liveStreams/search?query=；弹幕：Host.ws 直连 Ably（wss://17media-realtime.ably.io，action 10 ATTACH，channel 即 liveStreamID），帧内 messages[].data 是 base64(gzip(JSON))，插件自带纯 JS inflate 解压。",
         "房间号语义是 liveStreamID（数字），不是主播 userID（UUID）—— /api/v1/lives/<uuid> 会返回 invalid roomID。分享链接形如 https://17.live/live/<liveStreamID>，插件也认这种 URL。",
         "取流线路（实测 2026-09-30）：provider 5（wansu-global-pull-rtmp-latency.17app.co）是 https，把 .flv 换成 .m3u8 会返回标准 HLS master playlist（再重定向到 100ycdn，URL 带一次性 wsSession 鉴权），BANDWIDTH 依次为 原画 3228000 / _h264 2816000 / _QEHDSA 1859000 / _LBHDSA 698000；provider 17（tencent-global-pull-rtmp.17app.co）只有 http，https 握手空回、404。两条线路的可用性会**各自独立抖动**（探测中 wansu 曾被限流到整段时间全部超时，同一时刻 tencent 照常能拉下 1.4MB），所以两条都给出来让用户可手动切换，只给一条遇到单边故障就是「平台全挂」。http 不影响播放：iOS/macOS/tvOS 三个 Info.plist 都开了 NSAllowsArbitraryLoads。",
@@ -15,13 +16,21 @@
       "platform": "17live",
       "platformName": "17LIVE",
       "platformDescription": "17LIVE（17直播）",
-      "zipURL": "https://willrao.github.io/AngelLive-17live-plugin/17live-1.0.0.zip",
+      "icon": "assets/live_card_17live.png",
+      "iosIcon": "assets/live_card_17live.png",
+      "macosIcon": "assets/live_card_17live.png",
+      "tvosIcon": "assets/live_card_17live.png",
+      "tvosBigIcon": "assets/tv_17live_big.png",
+      "tvosSmallIcon": "assets/tv_17live_small.png",
+      "tvosBigIconDark": "assets/tv_17live_big_dark.png",
+      "tvosSmallIconDark": "assets/tv_17live_small_dark.png",
+      "zipURL": "https://willrao.github.io/AngelLive-17live-plugin/17live-1.1.0.zip",
       "zipURLs": [
-        "https://willrao.github.io/AngelLive-17live-plugin/17live-1.0.0.zip",
-        "https://cdn.jsdelivr.net/gh/WillRao/AngelLive-17live-plugin@main/docs/17live-1.0.0.zip",
-        "https://fastly.jsdelivr.net/gh/WillRao/AngelLive-17live-plugin@main/docs/17live-1.0.0.zip"
+        "https://willrao.github.io/AngelLive-17live-plugin/17live-1.1.0.zip",
+        "https://cdn.jsdelivr.net/gh/WillRao/AngelLive-17live-plugin@main/docs/17live-1.1.0.zip",
+        "https://fastly.jsdelivr.net/gh/WillRao/AngelLive-17live-plugin@main/docs/17live-1.1.0.zip"
       ],
-      "sha256": "223c134e30e4bf616a0f5b5b66ada9a553abfc77f8fae07c6ba852154f28a8fd",
+      "sha256": "30829b2186e4b3502f7d5260c557b5798ddbd94c15f670b01f6529d8ddd24fa9",
       "auth": {
         "required": false,
         "credentialKinds": [],

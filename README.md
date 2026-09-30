@@ -87,6 +87,7 @@ http 不影响播放：App 的 iOS / macOS / tvOS 三个 `Info.plist` 都开了 
 node dev/verify-all.mjs              # HTTP 在线 + 弹幕离线回归
 node dev/verify-all.mjs --full       # 再加上连真实 Ably 收弹幕的端到端
 node dev/capture-fixture.mjs         # 重抓一份弹幕夹具（dev/fixtures/）
+python3 dev/make-icons.py            # 重新生成 assets/ 下的平台图标
 node dev/pack.mjs                    # 打包 + 生成订阅源索引到 docs/
 ```
 
@@ -99,6 +100,34 @@ node dev/pack.mjs                    # 打包 + 生成订阅源索引到 docs/
 | `dev/verify-danmaku.mjs` | 连真实 Ably 跑完整 `getDanmaku → createSession → open → frame → tick`，断言 ATTACH 帧、进房、收到弹幕、心跳不回弹 |
 
 `verify-parser.mjs` 是最要紧的一层：手写 inflate 与 JSON 取值路径的 bug **都是静默的** —— 不抛错，只是弹幕一条都不显示。所以它的 oracle 用 Node 的 zlib 加一段刻意不复用插件代码的字段读取逻辑，两边唯一的共识只有「协议长什么样」。
+
+## 平台图标
+
+AngelLive **不读 manifest 里的图标字段**，而是按固定文件名去「已安装插件目录」里找 PNG
+（iOS `PlatformIconProvider`、macOS `MacPlatformIconProvider`、tvOS `TVPlatformIconProvider`）。
+也就是说图标只能靠**打进 zip 的 `assets/`** 来交付 —— 包不带图，就是没图标。
+
+| 文件 | 尺寸 | 用在哪 |
+| --- | --- | --- |
+| `assets/live_card_17live.png` | 128×128 | iOS 平台 tab、tvOS 账号列表；索引里四个 `icon` 字段也都指向它 |
+| `assets/mini_live_card_17live.png` | 128×128 | macOS 侧边栏（读入后强制 16pt 逻辑尺寸） |
+| `assets/pad_live_card_17live.png` | 128×128 | iOS / macOS 插件管理列表 |
+| `assets/tv_17live_big[_dark].png` | 740×444 | tvOS 平台页大图卡片（获得焦点时会被模糊） |
+| `assets/tv_17live_small[_dark].png` | 740×444 | tvOS 平台页焦点叠标（上面还要压一行描述文字） |
+
+`_dark` 缺失时宿主会自动回退到亮色版，但两套都给能少一层猜测。
+
+图标由 `dev/make-icons.py` 从 `dev/icon-source.png`（17LIVE 官方 App 图标，1024×1024）生成，
+产物已提交进仓库，所以 CI 与打包都不需要装 Pillow：
+
+```bash
+python3 dev/make-icons.py     # 换了源图或配色后重新生成 assets/
+```
+
+`dev/pack.mjs` 在打包前会逐张校验存在性、PNG 魔数与尺寸。图标缺失在 App 里只表现为
+「图标没了」，不留这道闸门很难定位回来。
+
+> 图标取自 17LIVE 的官方 App 图标，仅用于在 AngelLive 里标识对应平台；相关商标归 17LIVE INC. 所有。
 
 ## 打包
 
